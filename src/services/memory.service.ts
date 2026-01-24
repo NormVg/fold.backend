@@ -199,7 +199,7 @@ export async function getMemoryStats(userId: string) {
     ]);
 
     const moodStats = byMood.reduce(
-        (acc: Record<string, number>, item: { mood: string; _count: { mood: number } }) => {
+        (acc: Record<string, number>, item: { mood: number; _count: { mood: number } }) => {
             acc[item.mood] = item._count.mood;
             return acc;
         },

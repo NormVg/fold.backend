@@ -67,7 +67,7 @@ model Memory {
   userId          String    @map("user_id") @db.Uuid
   user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  mood            String    @db.VarChar(20) // v.sad, sad, normal, happy, v.happy
+  mood            Int       @db.SmallInt // -2 (v.sad) to 2 (v.happy)
 
   // Text
   textContent     String?   @map("text_content") @db.Text

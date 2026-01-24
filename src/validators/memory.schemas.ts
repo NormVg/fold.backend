@@ -2,11 +2,11 @@ import { z } from "zod";
 
 // ============ Memory Schemas ============
 
-export const moodEnum = z.enum(["v.sad", "sad", "normal", "happy", "v.happy"]);
+export const moodSchema = z.number().int().min(-2).max(2);
 export const visibilityEnum = z.enum(["private", "friends", "public"]);
 
 export const createMemorySchema = z.object({
-    mood: moodEnum,
+    mood: moodSchema,
 
     // Text (Mandatory)
     textContent: z.string().min(1, "Text content is required").max(10000),
@@ -34,7 +34,7 @@ export const createMemorySchema = z.object({
 });
 
 export const updateMemorySchema = z.object({
-    mood: moodEnum.optional(),
+    mood: moodSchema.optional(),
 
     // Text
     textContent: z.string().min(1).max(10000).optional().nullable(),
@@ -68,7 +68,7 @@ export const memoryIdParamSchema = z.object({
 export const memoryQuerySchema = z.object({
     page: z.string().optional().default("1").transform(Number).pipe(z.number().min(1)),
     limit: z.string().optional().default("20").transform(Number).pipe(z.number().min(1).max(100)),
-    mood: moodEnum.optional(),
+    mood: z.coerce.number().int().min(-2).max(2).optional(),
     visibility: visibilityEnum.optional(),
     startDate: z.string().datetime().optional(),
     endDate: z.string().datetime().optional(),
