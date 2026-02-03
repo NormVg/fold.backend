@@ -66,7 +66,7 @@ app.get("/", (c) => {
   return c.json({
     success: true,
     message: "Fold Backend API is running",
-    version: "1.0.35",
+    version: "1.0.37",
     timestamp: new Date().toISOString(),
   });
 });

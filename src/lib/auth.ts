@@ -1,10 +1,13 @@
-import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
+import { expo } from "@better-auth/expo";
 import { db } from "../db";
 import * as schema from "../db/schema";
 
 export const auth = betterAuth({
+    // Base URL for OAuth callbacks - MUST be set for production
+    baseURL: process.env.BETTER_AUTH_URL || "https://backend.fold.taohq.org",
+    
     database: drizzleAdapter(db, {
         provider: "pg",
         schema: {
@@ -17,15 +20,13 @@ export const auth = betterAuth({
 
     // Plugins
     plugins: [
-        expo({
-            disableOriginOverride: true, // Fixes "Missing or null Origin" error for mobile apps
-        }),
+        expo(), // Expo plugin adds /expo-authorization-proxy endpoint for OAuth
     ],
 
     // Email and Password authentication
     emailAndPassword: {
         enabled: true,
-        requireEmailVerification: false, // Disabled as per your request
+        requireEmailVerification: false,
     },
 
     // Google OAuth
@@ -65,15 +66,14 @@ export const auth = betterAuth({
         max: 100, // 100 requests per window
     },
 
-    // Advanced options - Fix for OAuth state mismatch in development
+    // Advanced options
     advanced: {
-        disableOriginCheck: true, // TODO: Re-enable origin check once mobile auth is working
         crossSubDomainCookies: {
-            enabled: false, // Disable for localhost development
+            enabled: false,
         },
         defaultCookieAttributes: {
             sameSite: "lax",
-            secure: process.env.NODE_ENV === "production", // Secure in production with HTTPS
+            secure: process.env.NODE_ENV === "production", // true for HTTPS in production
             httpOnly: true,
         },
     },
@@ -87,36 +87,19 @@ export const auth = betterAuth({
     },
 
     // Trusted origins for CORS and mobile apps
-    trustedOrigins: (request) => {
-        const origin = request?.headers?.get?.("origin");
-
-        const allowedOrigins = [
-            // Allow null/missing origin (React Native / mobile apps)
-            null,
-            undefined,
-            "",
-            // Production
-            "https://backend.fold.taohq.org",
-            process.env.FRONTEND_URL || "http://localhost:3001",
-            // Development
-            "http://localhost:3000",
-            "http://localhost:8081",
-            // Mobile app deep links
-            "fold://",
-            // Expo development
-            "exp://**",
-            "exp://192.168.*.*:*/**",
-            "exp://",
-        ];
-
-        // If no origin, allow it (mobile apps)
-        if (!origin) return allowedOrigins;
-
-        // Add the actual origin if it matches patterns
-        if (origin.startsWith("fold://") || origin.startsWith("exp://")) {
-            return [...allowedOrigins, origin];
-        }
-
-        return allowedOrigins;
-    },
+    trustedOrigins: [
+        // Production
+        "https://backend.fold.taohq.org",
+        process.env.FRONTEND_URL || "http://localhost:3001",
+        // Development
+        "http://localhost:3000",
+        "http://localhost:8081",
+        // Mobile app deep links
+        "fold://",
+        "fold://*",
+        // Expo development
+        "exp://",
+        "exp://**",
+        "exp://192.168.*.*:*/**",
+    ],
 });
