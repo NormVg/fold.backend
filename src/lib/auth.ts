@@ -1,3 +1,4 @@
+import { expo } from "@better-auth/expo";
 import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "../db";
@@ -13,6 +14,13 @@ export const auth = betterAuth({
             verification: schema.verification,
         },
     }),
+
+    // Plugins
+    plugins: [
+        expo({
+            disableOriginOverride: true, // Fixes "Missing or null Origin" error for mobile apps
+        }),
+    ],
 
     // Email and Password authentication
     emailAndPassword: {
@@ -59,12 +67,13 @@ export const auth = betterAuth({
 
     // Advanced options - Fix for OAuth state mismatch in development
     advanced: {
+        disableOriginCheck: true, // TODO: Re-enable origin check once mobile auth is working
         crossSubDomainCookies: {
             enabled: false, // Disable for localhost development
         },
         defaultCookieAttributes: {
             sameSite: "lax",
-            secure: false, // Set to true in production with HTTPS
+            secure: process.env.NODE_ENV === "production", // Secure in production with HTTPS
             httpOnly: true,
         },
     },
@@ -77,10 +86,37 @@ export const auth = betterAuth({
         },
     },
 
-    // Trusted origins for CORS
-    trustedOrigins: [
-        process.env.FRONTEND_URL || "http://localhost:3001",
-        "http://localhost:3000",
-        "http://localhost:8081",
-    ],
+    // Trusted origins for CORS and mobile apps
+    trustedOrigins: (request) => {
+        const origin = request?.headers?.get?.("origin");
+
+        const allowedOrigins = [
+            // Allow null/missing origin (React Native / mobile apps)
+            null,
+            undefined,
+            "",
+            // Production
+            "https://backend.fold.taohq.org",
+            process.env.FRONTEND_URL || "http://localhost:3001",
+            // Development
+            "http://localhost:3000",
+            "http://localhost:8081",
+            // Mobile app deep links
+            "fold://",
+            // Expo development
+            "exp://**",
+            "exp://192.168.*.*:*/**",
+            "exp://",
+        ];
+
+        // If no origin, allow it (mobile apps)
+        if (!origin) return allowedOrigins;
+
+        // Add the actual origin if it matches patterns
+        if (origin.startsWith("fold://") || origin.startsWith("exp://")) {
+            return [...allowedOrigins, origin];
+        }
+
+        return allowedOrigins;
+    },
 });

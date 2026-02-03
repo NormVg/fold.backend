@@ -1,15 +1,15 @@
-import "dotenv/config";
 import { serve } from "@hono/node-server";
+import { swaggerUI } from "@hono/swagger-ui";
+import "dotenv/config";
 import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { logger } from "hono/logger";
 import { prettyJSON } from "hono/pretty-json";
-import { swaggerUI } from "@hono/swagger-ui";
 import { auth } from "./lib/auth";
 import { authMiddleware, AuthVariables } from "./lib/middleware";
-import { userRoutes } from "./routes/user.routes";
-import { uploadRoutes } from "./routes/upload.routes";
 import { openApiSpec } from "./lib/openapi";
+import { uploadRoutes } from "./routes/upload.routes";
+import { userRoutes } from "./routes/user.routes";
 
 // Create Hono app with typed variables
 const app = new Hono<{ Variables: AuthVariables }>();
@@ -24,20 +24,33 @@ app.use("*", logger());
 // Pretty JSON responses in development
 app.use("*", prettyJSON());
 
-// CORS configuration
+// CORS configuration - Allow all origins
 app.use(
   "*",
   cors({
-    origin: [
-      process.env.FRONTEND_URL || "http://localhost:3001",
-      "http://localhost:3000",
-      "http://localhost:8081", // Expo web
-    ],
-    allowHeaders: ["Content-Type", "Authorization"],
+    origin: (origin) => {
+      // Allow requests with no origin (React Native / mobile apps)
+      if (!origin) return "*";
+
+      // Allow specific origins
+      const allowed = [
+        "https://backend.fold.taohq.org",
+        "http://localhost:3000",
+        "http://localhost:8081",
+      ];
+
+      // Allow Expo and app deep links
+      if (origin.startsWith("exp://") || origin.startsWith("fold://")) {
+        return origin;
+      }
+
+      return allowed.includes(origin) ? origin : null;
+    },
+    allowHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Cookie"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    exposeHeaders: ["Content-Length"],
-    maxAge: 600,
-    credentials: true,
+    exposeHeaders: ["Content-Length", "X-Request-Id", "Set-Cookie"],
+    maxAge: 86400,
+    credentials: true, // Required for cookies/sessions
   })
 );
 
@@ -53,7 +66,7 @@ app.get("/", (c) => {
   return c.json({
     success: true,
     message: "Fold Backend API is running",
-    version: "1.0.0",
+    version: "1.0.35",
     timestamp: new Date().toISOString(),
   });
 });
@@ -98,23 +111,23 @@ app.get("/test-login", (c) => {
     </head>
     <body>
       <h2>🧪 Auth Test Page</h2>
-      
+
       <h3>Google OAuth</h3>
       <button class="google" onclick="googleSignIn()">Sign in with Google</button>
-      
+
       <h3>Email/Password</h3>
       <input type="email" id="email" placeholder="Email" value="test@example.com" />
       <input type="password" id="password" placeholder="Password" value="password123" />
       <input type="text" id="name" placeholder="Name (for signup)" value="Test User" />
       <button class="email" onclick="signUp()">Sign Up</button>
       <button class="email" onclick="signIn()">Sign In</button>
-      
+
       <h3>Session</h3>
       <button onclick="getSession()">Get Session</button>
       <button onclick="signOut()">Sign Out</button>
-      
+
       <div id="result">Results will appear here...</div>
-      
+
       <script>
         async function signUp() {
           const res = await fetch('/api/auth/sign-up/email', {
@@ -129,7 +142,7 @@ app.get("/test-login", (c) => {
           });
           document.getElementById('result').textContent = JSON.stringify(await res.json(), null, 2);
         }
-        
+
         async function signIn() {
           const res = await fetch('/api/auth/sign-in/email', {
             method: 'POST',
@@ -142,17 +155,17 @@ app.get("/test-login", (c) => {
           });
           document.getElementById('result').textContent = JSON.stringify(await res.json(), null, 2);
         }
-        
+
         async function getSession() {
           const res = await fetch('/api/auth/session', { credentials: 'include' });
           document.getElementById('result').textContent = JSON.stringify(await res.json(), null, 2);
         }
-        
+
         async function signOut() {
           const res = await fetch('/api/auth/sign-out', { method: 'POST', credentials: 'include' });
           document.getElementById('result').textContent = 'Signed out!';
         }
-        
+
         async function googleSignIn() {
           document.getElementById('result').textContent = 'Redirecting to Google...';
           const res = await fetch('/api/auth/sign-in/social', {
@@ -177,10 +190,38 @@ app.get("/test-login", (c) => {
   `);
 });
 
+// Helper function to add expo-origin as origin header for Better Auth
+function withExpoOrigin(request: Request): Request {
+  const origin = request.headers.get("origin");
+  const expoOrigin = request.headers.get("expo-origin");
+  
+  console.log("[AUTH DEBUG] ====================================");
+  console.log("[AUTH DEBUG] Incoming auth request:");
+  console.log("[AUTH DEBUG]   URL:", request.url);
+  console.log("[AUTH DEBUG]   Method:", request.method);
+  console.log("[AUTH DEBUG]   origin header:", origin);
+  console.log("[AUTH DEBUG]   expo-origin header:", expoOrigin);
+  
+  if (!expoOrigin) {
+    console.log("[AUTH DEBUG] No expo-origin, using request as-is");
+    console.log("[AUTH DEBUG] ====================================");
+    return request;
+  }
+
+  const newHeaders = new Headers(request.headers);
+  newHeaders.set("origin", expoOrigin);
+  
+  console.log("[AUTH DEBUG] Mapped expo-origin to origin:", expoOrigin);
+  console.log("[AUTH DEBUG] ====================================");
+
+  return new Request(request, { headers: newHeaders });
+}
+
 // Better Auth routes - handles all auth endpoints
 // POST/GET /api/auth/* - sign-up, sign-in, sign-out, oauth, etc.
 app.on(["POST", "GET"], "/api/auth/*", (c) => {
-  return auth.handler(c.req.raw);
+  console.log("[AUTH DEBUG] Auth route matched:", c.req.method, c.req.path);
+  return auth.handler(withExpoOrigin(c.req.raw));
 });
 
 // User management routes
@@ -237,8 +278,8 @@ serve(
 ╔═══════════════════════════════════════════════════════════╗
 ║                    FOLD BACKEND API                       ║
 ╠═══════════════════════════════════════════════════════════╣
-║  Server running on: http://localhost:${info.port}               ║
-║  Environment: ${(process.env.NODE_ENV || "development").padEnd(41)}║
+║  Server running on: http://localhost:${info.port}         ║
+║  Environment: ${(process.env.NODE_ENV)}                   ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  Auth Endpoints:                                          ║
 ║    POST /api/auth/sign-up/email     - Email registration  ║
