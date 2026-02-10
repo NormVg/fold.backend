@@ -182,29 +182,19 @@ const createEntrySchema = z.object({
     // Text
     content: z.string().optional().nullable(),
 
-    // Audio
-    audioUri: z.string().optional().nullable(),
-    audioDuration: z.number().optional().nullable(),
-
-    // Photo
-    photoUri: z.string().optional().nullable(),
-    photoUris: z.array(z.string()).optional().nullable(),
-
-    // Video
-    videoUri: z.string().optional().nullable(),
-    thumbnailUri: z.string().optional().nullable(),
-    videoDuration: z.number().optional().nullable(),
-
-    // Story
+    // Story-specific
     title: z.string().optional().nullable(),
     storyContent: z.string().optional().nullable(),
     pageCount: z.number().optional().nullable(),
-    storyMedia: z
+
+    // Unified media array — all media (photos, videos, audio) goes here
+    media: z
         .array(
             z.object({
                 uri: z.string(),
-                type: z.enum(["image", "video"]),
-                duration: z.number().optional(),
+                type: z.enum(["image", "video", "audio"]),
+                thumbnailUri: z.string().optional().nullable(),
+                duration: z.number().optional().nullable(),
             })
         )
         .optional()
@@ -250,7 +240,7 @@ timelineRoutes.post("/", requireAuth, async (c) => {
         const data = parsed.data;
         const entryId = generateId();
 
-        // 1. Insert the entry
+        // 1. Insert the entry (no media columns — all media goes to entry_media)
         const [entry] = await db
             .insert(timelineEntry)
             .values({
@@ -261,64 +251,33 @@ timelineRoutes.post("/", requireAuth, async (c) => {
                 location: data.location || null,
                 caption: data.caption || null,
                 content: data.content || null,
-                audioUri: data.audioUri || null,
-                audioDuration: data.audioDuration
-                    ? Math.round(data.audioDuration)
-                    : null,
-                videoUri: data.videoUri || null,
-                thumbnailUri: data.thumbnailUri || null,
-                videoDuration: data.videoDuration
-                    ? Math.round(data.videoDuration)
-                    : null,
                 title: data.title || null,
                 storyContent: data.storyContent || null,
                 pageCount: data.pageCount ? Math.round(data.pageCount) : null,
             })
             .returning();
 
-        // 2. Insert media items
+        // 2. Insert all media items into entry_media
         const mediaItems: {
             id: string;
             entryId: string;
             uri: string;
             type: string;
+            thumbnailUri: string | null;
             duration: number | null;
             sortOrder: number;
         }[] = [];
 
-        // Photo URIs → entry_media
-        if (data.photoUris && data.photoUris.length > 0) {
-            data.photoUris.forEach((uri, i) => {
+        if (data.media && data.media.length > 0) {
+            data.media.forEach((m, i) => {
                 mediaItems.push({
                     id: generateId(),
                     entryId,
-                    uri,
-                    type: "image",
-                    duration: null,
-                    sortOrder: i,
-                });
-            });
-        } else if (data.photoUri) {
-            mediaItems.push({
-                id: generateId(),
-                entryId,
-                uri: data.photoUri,
-                type: "image",
-                duration: null,
-                sortOrder: 0,
-            });
-        }
-
-        // Story media → entry_media
-        if (data.storyMedia && data.storyMedia.length > 0) {
-            data.storyMedia.forEach((media, i) => {
-                mediaItems.push({
-                    id: generateId(),
-                    entryId,
-                    uri: media.uri,
-                    type: media.type,
-                    duration: media.duration
-                        ? Math.round(media.duration)
+                    uri: m.uri,
+                    type: m.type,
+                    thumbnailUri: m.thumbnailUri || null,
+                    duration: m.duration
+                        ? Math.round(m.duration)
                         : null,
                     sortOrder: i,
                 });
@@ -329,14 +288,19 @@ timelineRoutes.post("/", requireAuth, async (c) => {
             await db.insert(entryMedia).values(mediaItems);
         }
 
-        // 3. Update profile stats (streak, score, badges)
+        // 3. Compute audioDuration for profile stats (from audio media)
+        const audioDuration = data.media
+            ?.find((m) => m.type === "audio")
+            ?.duration || undefined;
+
+        // 4. Update profile stats (streak, score, badges)
         await updateProfileStats(
             currentUser.id,
             data.type,
-            data.audioDuration || undefined
+            audioDuration
         );
 
-        // 4. Return the created entry with media
+        // 5. Return the created entry with media
         return c.json(
             {
                 success: true,
@@ -346,6 +310,7 @@ timelineRoutes.post("/", requireAuth, async (c) => {
                         id: m.id,
                         uri: m.uri,
                         type: m.type,
+                        thumbnailUri: m.thumbnailUri,
                         duration: m.duration,
                         sortOrder: m.sortOrder,
                     })),
@@ -416,6 +381,7 @@ timelineRoutes.get("/", requireAuth, async (c) => {
                 id: m.id,
                 uri: m.uri,
                 type: m.type,
+                thumbnailUri: m.thumbnailUri,
                 duration: m.duration,
                 sortOrder: m.sortOrder,
             })),
@@ -482,6 +448,7 @@ timelineRoutes.get("/:id", requireAuth, async (c) => {
                     id: m.id,
                     uri: m.uri,
                     type: m.type,
+                    thumbnailUri: m.thumbnailUri,
                     duration: m.duration,
                     sortOrder: m.sortOrder,
                 })),

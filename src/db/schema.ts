@@ -120,15 +120,6 @@ export const timelineEntry = pgTable("timeline_entry", {
     // Text entry fields
     content: text("content"),
 
-    // Audio entry fields
-    audioUri: text("audio_uri"),
-    audioDuration: integer("audio_duration"), // seconds
-
-    // Video entry fields
-    videoUri: text("video_uri"),
-    thumbnailUri: text("thumbnail_uri"),
-    videoDuration: integer("video_duration"), // seconds
-
     // Story entry fields
     title: text("title"),
     storyContent: text("story_content"),
@@ -138,14 +129,16 @@ export const timelineEntry = pgTable("timeline_entry", {
     updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
 
-// Entry Media table - Media items associated with an entry (photos, story media)
+// Entry Media table - ALL media associated with an entry (images, videos, audio)
 export const entryMedia = pgTable("entry_media", {
     id: text("id").primaryKey(),
     entryId: text("entry_id")
         .notNull()
         .references(() => timelineEntry.id, { onDelete: "cascade" }),
     uri: text("uri").notNull(),
-    type: text("type").notNull(), // 'image' | 'video'
-    duration: integer("duration"), // for video media, in seconds
+    type: text("type").notNull(), // 'image' | 'video' | 'audio'
+    thumbnailUri: text("thumbnail_uri"), // for video thumbnails
+    duration: integer("duration"), // for video/audio media, in seconds
     sortOrder: integer("sort_order").notNull().default(0),
 });
+
