@@ -8,6 +8,7 @@ import { prettyJSON } from "hono/pretty-json";
 import { auth } from "./lib/auth";
 import { authMiddleware, AuthVariables } from "./lib/middleware";
 import { openApiSpec } from "./lib/openapi";
+import { configRoutes } from "./routes/config.routes";
 import { profileRoutes } from "./routes/profile.routes";
 import { timelineRoutes } from "./routes/timeline.routes";
 import { uploadRoutes } from "./routes/upload.routes";
@@ -237,6 +238,9 @@ app.route("/api/profile", profileRoutes);
 
 // Timeline routes
 app.route("/api/timeline", timelineRoutes);
+
+// Config routes (serves Appwrite config to client)
+app.route("/api/config", configRoutes);
 
 // =============================================================================
 // Error Handling
