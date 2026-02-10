@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "@types/node": "^20.19.30",
+    "axios": "^1.13.5",
     "drizzle-kit": "^0.31.8",
     "tsup": "^8.5.1",
     "tsx": "^4.7.1",

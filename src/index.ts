@@ -8,6 +8,8 @@ import { prettyJSON } from "hono/pretty-json";
 import { auth } from "./lib/auth";
 import { authMiddleware, AuthVariables } from "./lib/middleware";
 import { openApiSpec } from "./lib/openapi";
+import { profileRoutes } from "./routes/profile.routes";
+import { timelineRoutes } from "./routes/timeline.routes";
 import { uploadRoutes } from "./routes/upload.routes";
 import { userRoutes } from "./routes/user.routes";
 
@@ -194,14 +196,14 @@ app.get("/test-login", (c) => {
 function withExpoOrigin(request: Request): Request {
   const origin = request.headers.get("origin");
   const expoOrigin = request.headers.get("expo-origin");
-  
+
   console.log("[AUTH DEBUG] ====================================");
   console.log("[AUTH DEBUG] Incoming auth request:");
   console.log("[AUTH DEBUG]   URL:", request.url);
   console.log("[AUTH DEBUG]   Method:", request.method);
   console.log("[AUTH DEBUG]   origin header:", origin);
   console.log("[AUTH DEBUG]   expo-origin header:", expoOrigin);
-  
+
   if (!expoOrigin) {
     console.log("[AUTH DEBUG] No expo-origin, using request as-is");
     console.log("[AUTH DEBUG] ====================================");
@@ -210,7 +212,7 @@ function withExpoOrigin(request: Request): Request {
 
   const newHeaders = new Headers(request.headers);
   newHeaders.set("origin", expoOrigin);
-  
+
   console.log("[AUTH DEBUG] Mapped expo-origin to origin:", expoOrigin);
   console.log("[AUTH DEBUG] ====================================");
 
@@ -229,6 +231,12 @@ app.route("/api/user", userRoutes);
 
 // File upload routes
 app.route("/api/upload", uploadRoutes);
+
+// Profile routes
+app.route("/api/profile", profileRoutes);
+
+// Timeline routes
+app.route("/api/timeline", timelineRoutes);
 
 // =============================================================================
 // Error Handling
@@ -305,6 +313,18 @@ serve(
 ║    GET    /api/upload/:id           - Get file details    ║
 ║    DELETE /api/upload/:id           - Delete file         ║
 ║    GET    /api/upload/list/all      - List all files      ║
+╠═══════════════════════════════════════════════════════════╣
+║  Profile Endpoints:                                        ║
+║    GET    /api/profile/me           - Get profile stats   ║
+║    GET    /api/profile/activity     - Activity heatmap    ║
+║    POST   /api/profile/log-activity - Log new entry       ║
+╠═══════════════════════════════════════════════════════════╣
+║  Timeline Endpoints:                                       ║
+║    POST   /api/timeline             - Create entry        ║
+║    GET    /api/timeline             - List entries         ║
+║    GET    /api/timeline/:id         - Get single entry    ║
+║    PATCH  /api/timeline/:id         - Update entry        ║
+║    DELETE /api/timeline/:id         - Delete entry        ║
 ╠═══════════════════════════════════════════════════════════╣
 ║  📚 Documentation:                                        ║
 ║    GET    /docs                     - Swagger UI          ║

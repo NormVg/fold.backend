@@ -1,9 +1,9 @@
 import {
+    boolean,
+    integer,
     pgTable,
     text,
     timestamp,
-    boolean,
-    integer,
 } from "drizzle-orm/pg-core";
 
 // User table - Core user data + custom fields (name, avatar)
@@ -66,4 +66,86 @@ export const rateLimit = pgTable("rate_limit", {
     key: text("key").notNull(),
     count: integer("count").notNull().default(0),
     lastRequest: timestamp("last_request").notNull().defaultNow(),
+});
+
+// User Profile table - Extended profile data (1:1 with user)
+export const userProfile = pgTable("user_profile", {
+    userId: text("user_id")
+        .primaryKey()
+        .references(() => user.id, { onDelete: "cascade" }),
+    foldScore: integer("fold_score").notNull().default(0),
+    currentStreak: integer("current_streak").notNull().default(0),
+    longestStreak: integer("longest_streak").notNull().default(0),
+    lastActiveDate: text("last_active_date"), // stored as "YYYY-MM-DD"
+    totalEntries: integer("total_entries").notNull().default(0),
+    totalAudioMinutes: integer("total_audio_minutes").notNull().default(0),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// User Activity table - Daily activity log for heatmap grid
+// Uniqueness on (userId, date) enforced at application level via upsert logic
+export const userActivity = pgTable("user_activity", {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    date: text("date").notNull(), // stored as "YYYY-MM-DD"
+    entryCount: integer("entry_count").notNull().default(0),
+    activityLevel: integer("activity_level").notNull().default(0), // 0-3
+});
+
+// User Badge table - Earned achievements/badges
+// Uniqueness on (userId, badgeType) enforced at application level
+export const userBadge = pgTable("user_badge", {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    badgeType: text("badge_type").notNull(), // e.g. 'early-bird', 'the-voice', 'on-fire'
+    earnedAt: timestamp("earned_at").notNull().defaultNow(),
+});
+
+// Timeline Entry table - All entry types in one table
+export const timelineEntry = pgTable("timeline_entry", {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+        .notNull()
+        .references(() => user.id, { onDelete: "cascade" }),
+    type: text("type").notNull(), // 'text' | 'audio' | 'photo' | 'video' | 'story'
+    mood: text("mood"),
+    location: text("location"),
+    caption: text("caption"), // used by photo/video/audio entries
+
+    // Text entry fields
+    content: text("content"),
+
+    // Audio entry fields
+    audioUri: text("audio_uri"),
+    audioDuration: integer("audio_duration"), // seconds
+
+    // Video entry fields
+    videoUri: text("video_uri"),
+    thumbnailUri: text("thumbnail_uri"),
+    videoDuration: integer("video_duration"), // seconds
+
+    // Story entry fields
+    title: text("title"),
+    storyContent: text("story_content"),
+    pageCount: integer("page_count"),
+
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+});
+
+// Entry Media table - Media items associated with an entry (photos, story media)
+export const entryMedia = pgTable("entry_media", {
+    id: text("id").primaryKey(),
+    entryId: text("entry_id")
+        .notNull()
+        .references(() => timelineEntry.id, { onDelete: "cascade" }),
+    uri: text("uri").notNull(),
+    type: text("type").notNull(), // 'image' | 'video'
+    duration: integer("duration"), // for video media, in seconds
+    sortOrder: integer("sort_order").notNull().default(0),
 });
